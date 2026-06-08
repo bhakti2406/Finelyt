@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+scikit-learn
+plotly
+joblib
+google-genai
+python-dotenv
+faker
