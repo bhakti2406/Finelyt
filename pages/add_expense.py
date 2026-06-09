@@ -313,6 +313,8 @@ def show(user_id=1):
                 exp_date, category, amount,
                 notes, payment_method, user_id
             )
+            from utils.db import clear_cache
+            clear_cache()
             st.success(
                 f"Saved {format_amount(amount, currency)} "
                 f"for {category} via {payment_method} "
