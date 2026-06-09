@@ -58,6 +58,11 @@ def add_goal(user_id, name, target, currency, deadline, category, icon):
     )
     conn.commit()
     conn.close()
+    try:
+        import streamlit as _st
+        _st.cache_data.clear()
+    except Exception:
+        pass
 
 def get_goals(user_id):
     conn = sqlite3.connect(DB_PATH)
@@ -80,6 +85,11 @@ def add_deposit(goal_id, user_id, amount, note, dep_date):
     )
     conn.commit()
     conn.close()
+    try:
+        import streamlit as _st
+        _st.cache_data.clear()
+    except Exception:
+        pass
 
 def get_deposits(goal_id):
     conn = sqlite3.connect(DB_PATH)
@@ -96,6 +106,11 @@ def delete_goal(goal_id, user_id):
     conn.execute("DELETE FROM saving_goals WHERE id=? AND user_id=?", (goal_id, user_id))
     conn.commit()
     conn.close()
+    try:
+        import streamlit as _st
+        _st.cache_data.clear()
+    except Exception:
+        pass
 
 def delete_deposit(dep_id, goal_id, user_id, amount):
     conn = sqlite3.connect(DB_PATH)
@@ -106,6 +121,11 @@ def delete_deposit(dep_id, goal_id, user_id, amount):
     )
     conn.commit()
     conn.close()
+    try:
+        import streamlit as _st
+        _st.cache_data.clear()
+    except Exception:
+        pass
 
 CATEGORIES = [
     "Emergency Fund", "Vacation", "Home", "Car",
@@ -118,6 +138,74 @@ ICONS = {
     "Wedding": "", "Gadget": "",
     "Investment": "", "Retirement": "", "Other": "",
 }
+
+def show_toast(message, icon="✅", color="#00C896", duration=4000):
+    """
+    Floating popup that auto-dismisses. Stores in session state so it
+    survives st.rerun() and renders on the next page load.
+    Rendered via HTML/JS fixed-position overlay.
+    """
+    unique_id = f"fc_popup_{abs(hash(message)) % 99999}"
+    st.markdown(f"""
+    <div id="{unique_id}" style="
+        position:fixed; top:76px; right:20px; z-index:99999;
+        background:linear-gradient(135deg,#0D1B2A,#1A2744);
+        border:1px solid {color};
+        border-left:5px solid {color};
+        border-radius:14px;
+        padding:18px 22px 16px 18px;
+        min-width:320px; max-width:380px;
+        box-shadow:0 8px 32px rgba(0,0,0,0.5);
+        animation:fcPopIn 0.35s cubic-bezier(.175,.885,.32,1.275);
+        font-family:inherit;
+    ">
+        <div style="display:flex;align-items:flex-start;gap:14px;">
+            <span style="font-size:1.8rem;line-height:1">{icon}</span>
+            <div style="flex:1">
+                <p style="color:{color};font-weight:800;font-size:0.95rem;
+                           margin:0 0 4px 0;letter-spacing:-0.01em">
+                    {message.split(chr(10))[0]}
+                </p>
+                {"".join(f'<p style="color:#94A3B8;font-size:0.82rem;margin:2px 0 0 0">{line}</p>' for line in message.split(chr(10))[1:])}
+            </div>
+            <span onclick="document.getElementById('{unique_id}').remove()"
+                  style="color:#94A3B8;cursor:pointer;font-size:1.1rem;
+                         line-height:1;padding:2px 4px;border-radius:4px"
+                  onmouseover="this.style.color='#FFF'"
+                  onmouseout="this.style.color='#94A3B8'">✕</span>
+        </div>
+        <div style="margin-top:10px;height:3px;border-radius:99px;
+                    background:rgba(255,255,255,0.08);overflow:hidden">
+            <div id="{unique_id}_bar" style="height:3px;border-radius:99px;
+                 background:{color};width:100%;
+                 transition:width {duration}ms linear"></div>
+        </div>
+    </div>
+    <style>
+    @keyframes fcPopIn {{
+        from {{ opacity:0; transform:translateX(60px) scale(0.95); }}
+        to   {{ opacity:1; transform:translateX(0) scale(1); }}
+    }}
+    </style>
+    <script>
+    (function() {{
+        var el = document.getElementById("{unique_id}");
+        var bar = document.getElementById("{unique_id}_bar");
+        if (!el) return;
+        // Start progress bar animation
+        setTimeout(function() {{ if(bar) bar.style.width = "0%"; }}, 50);
+        // Auto-dismiss
+        setTimeout(function() {{
+            if(el) {{
+                el.style.transition = "opacity 0.4s, transform 0.4s";
+                el.style.opacity = "0";
+                el.style.transform = "translateX(60px)";
+                setTimeout(function() {{ if(el) el.remove(); }}, 400);
+            }}
+        }}, {duration});
+    }})();
+    </script>
+    """, unsafe_allow_html=True)
 
 def show(user_id=1):
     init_db()
@@ -165,12 +253,28 @@ def show(user_id=1):
         st.divider()
 
     # ── TABS ──────────────────────────────────────────────────────────────────
-    tab1, tab2 = st.tabs(["My Goals", "New Goal"])
+    # ── TABS ──────────────────────────────────────────────────────────────────
+    # Show goal-created popup ABOVE tabs — visible regardless of active tab
+    if st.session_state.get('show_goal_created_popup'):
+        _goal_name = st.session_state.pop('last_created_goal', 'your goal')
+        st.session_state.pop('show_goal_created_popup')
+        show_toast(
+            f" Goal Created Successfully!\n"
+            f"\"{_goal_name}\" has been added to your savings goals.\n"
+            f"Track your progress right here in My Goals.",
+            icon="🎯", color="#00C896", duration=5000
+        )
+
+    tab2, tab1 = st.tabs(["New Goal", "My Goals"])
 
     # ══════════════════════════════════════════════════════════════════════════
     # TAB 1 — MY GOALS
     # ══════════════════════════════════════════════════════════════════════════
     with tab1:
+        # Show post-rerun toasts (delete, deposit actions)
+        if st.session_state.get('savings_toast'):
+            msg, icon, color = st.session_state.pop('savings_toast')
+            show_toast(msg, icon=icon, color=color)
         goals_df = get_goals(user_id)
 
         if goals_df.empty:
@@ -348,6 +452,10 @@ def show(user_id=1):
                                      use_container_width=True):
                             delete_goal(gid, user_id)
                             st.session_state.del_goal = None
+                            st.session_state['savings_toast'] = (
+                                " Goal Deleted\nThe goal has been permanently removed.",
+                                "🗑️", "#F05252")
+                            st.toast("🗑️ Goal deleted.", icon="✅")
                             st.rerun()
                     with db:
                         if st.button("Cancel",
@@ -399,13 +507,15 @@ def show(user_id=1):
                                     dep_note, dep_date)
                                 new_saved = saved + amt
                                 if new_saved >= target:
-                                    st.success(
-                                        f"Goal complete! "
-                                        f"{g['name']} reached!")
+                                    st.session_state['savings_toast'] = (
+                                        f"🏆 Goal Complete!\n\"{g['name']}\" has been fully funded!\nAmazing work — you hit your target! 🎉",
+                                        "🏆", "#FFD700")
+                                    st.toast(f"🏆 Goal complete! You hit your target!", icon="🏆")
                                 else:
-                                    st.success(
-                                        f"Added {money(amt,cur)} "
-                                        f"to {g['name']}!")
+                                    st.session_state['savings_toast'] = (
+                                        f"💰 Progress Updated!\n{money(amt,cur)} added to \"{g['name']}\".",
+                                        "💰", "#00C896")
+                                    st.toast(f"💰 {money(amt,cur)} added to {g['name']}!", icon="✅")
                                 st.session_state.dep_goal = None
                                 st.rerun()
                         except Exception:
@@ -581,10 +691,9 @@ def show(user_id=1):
                 dl_str = str(g_deadline) if g_deadline else ''
                 add_goal(user_id, g_name.strip(), target,
                          g_cur, dl_str, g_cat, g_icon)
-                st.success(
-                    f"Goal created: "
-                    f"**{g_name.strip()}** — "
-                    f"{money(target, g_cur)}")
-                st.info(
-                    "Go to My Goals tab to add deposits "
-                    "and track progress.")
+                # Store the created goal name for the popup
+                st.session_state['last_created_goal'] = g_name.strip()
+                # Show popup on the New Goal tab — NO auto-switch
+                # User sees confirmation immediately on this page
+                st.session_state['show_goal_created_popup'] = True
+                st.rerun()
