@@ -160,14 +160,18 @@ def send_otp_email(recipient_email: str, otp_code: str, username: str) -> tuple[
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#0D1F2D 0%,#0A2540 100%);padding:32px 40px;text-align:center;border-bottom:1px solid #1E2D3D;">
-              <div style="display:inline-block;">
-                <span style="font-size:26px;font-weight:900;letter-spacing:-0.5px;">
-                  <span style="color:#00D4AA;">Fin</span><span style="color:#FFFFFF;">elyt</span>
-                </span>
-              </div>
-              <p style="color:#64748B;font-size:13px;margin:6px 0 0 0;letter-spacing:0.5px;">
-                AI FINANCE COACH
-              </p>
+              <div style="display:inline-block;text-align:center;">
+  <img src="data:image/png;base64,..." alt="Finelyt"
+       width="64" height="70"
+       style="display:block;margin:0 auto 8px auto;" />
+  <span style="font-size:22px;font-weight:900;letter-spacing:-0.5px;">
+    <span style="color:#FFFFFF;">FINE</span>
+    <span style="background:linear-gradient(90deg,#00F2A8,#00D4FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">LYT</span>
+  </span>
+</div>
+<p style="color:#64748B;font-size:12px;margin:6px 0 0 0;letter-spacing:4px;">
+  AI PERSONAL FINANCE COACH
+</p>
             </td>
           </tr>
 
