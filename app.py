@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Finelyt | AI Finance Coach",
-     page_icon="📈",
+    page_icon="📈",
     layout="wide"
 )
 
@@ -274,9 +274,22 @@ if 'reset_email' not in st.session_state:
 if 'reset_user_id' not in st.session_state:
     st.session_state.reset_user_id = None
 
-# ── SESSION RESTORE ───────────────────────────────────────────────────────────
-# MUST run before the timeout check so the token is read before last_active
-# is evaluated. On a fresh page load session_state is empty — restore first.
+# Inactivity Timeout (Auto logout after 15 minutes of inactivity)
+TIMEOUT_MINUTES = 15
+if 'last_active' in st.session_state and st.session_state.logged_in:
+    elapsed = (datetime.datetime.now() - st.session_state.last_active).total_seconds()
+    if elapsed > TIMEOUT_MINUTES * 60:
+        st.session_state.logged_in = False
+        st.session_state.user_id = None
+        st.session_state.username = ''
+        st.session_state.messages = []
+        st.query_params.clear()
+        st.warning("Session timed out due to inactivity. Please log in again.")
+        st.rerun()
+
+st.session_state.last_active = datetime.datetime.now()
+
+# Restore session securely on browser refresh using HMAC verification
 params = st.query_params
 if not st.session_state.logged_in:
     if 'session_token' in params:
@@ -284,13 +297,14 @@ if not st.session_state.logged_in:
         res = verify_session_token(params['session_token'])
         if res:
             uid, u_name = res
-            st.session_state.logged_in  = True
-            st.session_state.username   = u_name
-            st.session_state.user_id    = uid
-            # Reset last_active so the timeout doesn't fire immediately
-            st.session_state.last_active = datetime.datetime.now()
+            st.session_state.logged_in = True
+            st.session_state.username  = u_name
+            st.session_state.user_id   = uid
+            from utils.db import log_login_activity
+            log_login_activity(uid, "Session Restored", "0.0.0.0")
 
-# Restore active page from URL
+# Restore the active page from the URL so refresh lands on the same page.
+# current_page is written to query_params every time the user navigates.
 if st.session_state.logged_in and 'page' in params:
     _page_from_url = params['page']
     _nav_items_check = [
@@ -300,27 +314,6 @@ if st.session_state.logged_in and 'page' in params:
     ]
     if _page_from_url in _nav_items_check:
         st.session_state.current_page = _page_from_url
-
-# ── INACTIVITY TIMEOUT ────────────────────────────────────────────────────────
-# Only runs when logged in AND last_active is already set (not on fresh load).
-# Does NOT clear query_params — session_token stays so refresh still works.
-TIMEOUT_MINUTES = 30
-if ('last_active' in st.session_state
-        and st.session_state.logged_in
-        and st.session_state.last_active is not None):
-    elapsed = (datetime.datetime.now() - st.session_state.last_active).total_seconds()
-    if elapsed > TIMEOUT_MINUTES * 60:
-        st.session_state.logged_in   = False
-        st.session_state.user_id     = None
-        st.session_state.username    = ''
-        st.session_state.messages    = []
-        st.session_state.last_active = None
-        # Clear token on genuine timeout — user must log in again
-        st.query_params.clear()
-        st.warning("Session timed out due to inactivity. Please log in again.")
-        st.rerun()
-
-st.session_state.last_active = datetime.datetime.now()
 
 # ── AUTH PAGE ─────────────────────────────────────────────────────────────────
 if not is_logged_in():
@@ -698,11 +691,6 @@ if not is_logged_in():
                             "Password", type="password",
                             placeholder="Enter your password", key="login_password_input"
                         )
-                        remember_me = st.checkbox(
-                            "Remember me on this device",
-                            key="remember_me_check",
-                            help="Keep me logged in for 30 days even after closing the browser"
-                        )
                         st.markdown("<br>", unsafe_allow_html=True)
                         login_btn = st.form_submit_button(
                             "Sign In",
@@ -731,17 +719,20 @@ if not is_logged_in():
                                     username, password
                                 )
                             if success:
-                                st.session_state.logged_in   = True
-                                st.session_state.user_id     = user_id
-                                st.session_state.username    = username
-                                st.session_state.last_active = datetime.datetime.now()
+                                st.session_state.logged_in  = True
+                                st.session_state.user_id    = user_id
+                                st.session_state.username   = username
 
-                                # Always write session_token so page refresh
-                                # keeps the user logged in.
-                                token = generate_session_token(user_id, username)
-                                st.query_params['session_token'] = token
                                 if remember_me:
+                                    # Write session token to URL — persists
+                                    # across browser close for 30 days
+                                    st.query_params['session_token'] = generate_session_token(
+                                        user_id, username
+                                    )
                                     st.query_params['remember'] = '1'
+                                else:
+                                    # No token written — session ends on close
+                                    st.query_params.clear()
 
                                 from utils.db import log_login_activity
                                 log_login_activity(user_id, "Web Login", "0.0.0.0")
