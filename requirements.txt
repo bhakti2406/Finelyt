@@ -1,0 +1,9 @@
+streamlit==1.58.0
+pandas==3.0.3
+numpy==2.4.6
+scikit-learn==1.8.0
+plotly==6.7.0
+joblib==1.5.3
+google-genai==2.7.0
+python-dotenv==1.2.2
+bcrypt==5.0.0
